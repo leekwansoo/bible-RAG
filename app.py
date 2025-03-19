@@ -2,8 +2,9 @@
 import streamlit as st 
 from langchain_community.document_loaders import TextLoader
 import os
+import json
 from modules.chroma_db import add_to_vectostore, find_related_docs, generate_answer
-from file_handler import save_uploaded_file, load_pdf, split_into_chunks, generate_question, create_query_file, add_qa_file, check_file_exist
+from file_handler import save_uploaded_file, load_pdf, split_into_chunks, generate_question_from_docs, create_query_file, add_qa_file, check_file_exist, check_query_exist
 
 model = "qwen2" # download model with "ollama pull qwen2" from PS terminal
 
@@ -30,7 +31,7 @@ st.session_state["query_file"] = []
 
 # Create a sidebar for navigation
 st.sidebar.title("Menu")
-options = st.sidebar.radio("Select an option", ["Upload File", "Query from Uploaded File"])
+options = st.sidebar.radio("Select an option", ["Upload File", "Query from Uploaded File", "Query Answer list"])
 
 if options == "Upload File":
     st.sidebar.header("Upload File")
@@ -55,7 +56,7 @@ if options == "Upload File":
             response = add_to_vectostore(chunks)
             if response:
                 st.sidebar.success("PDF indexed successfully!")
-                query_list, used_token = generate_question(docs)
+                query_list, used_token = generate_question_from_docs(docs)
                 query_file = create_query_file(file_name, query_list)
                 num_of_query = len(query_file)
                 st.session_state["query_file"].append(query_file)
@@ -69,10 +70,9 @@ if options == "Upload File":
             st.sidebar.write("Please upload a PDF and select documents to get started.")                
             
             
-else:
-    options = "Query from Uploaded File"
+elif options == "Query from Uploaded File":
     st.header("Query from Uploaded File")
-    
+        
     query_file_list = os.listdir("query")
     selected = st.sidebar.selectbox("Select document to query", query_file_list)
     file_name = f"query/{selected}"
@@ -88,12 +88,28 @@ else:
             st.sidebar.markdown(query)
     
             if st.sidebar.button(f"Query", key=f"button_{i}"):  # Add a button with a unique key
-                related_docs = find_related_docs(query)
-                response = generate_answer(query, related_docs)
-                if response:
-                    st.write(response)
-                    qa_pair = {"query": query, "answer": response}
-                    qa_file = add_qa_file(file_name, qa_pair)
-                    st.write(f"QA pair is saved in {qa_file}")
+                existing_query = check_query_exist(file_name, query)
+                if existing_query:
+                    st.write(existing_query.answer)
+                else:
+                    related_docs = find_related_docs(query)
+                    response = generate_answer(query, related_docs)
+                    if response:
+                        st.write(response)
+                        qa_pair = {"query": query, "answer": response}
+                        qa_file = add_qa_file(file_name, qa_pair)
+                        st.write(f"QA pair is saved in {qa_file}")
     
-    main_query()    
+elif options == "Query Answer list":
+    st.header("Query Answer list")
+        
+    qa_pair_list = os.listdir("qafiles")
+    selected = st.sidebar.selectbox("Select a QA File", qa_pair_list)
+    file_name = f"qafiles/{selected}"
+    st.write(f"QA pair in {file_name}")
+    qa_list = json.load(open(file_name, "r", encoding="utf-8"))
+    #print(qa_list)
+    for qa_pair in qa_list:
+        st.write(qa_pair)
+ 
+main_query()    
