@@ -2,7 +2,7 @@ import streamlit as st
 from langchain_community.document_loaders import TextLoader
 import os
 from modules.chroma_db import add_to_vectostore, find_related_docs, generate_answer
-from file_handler import save_uploaded_file, load_pdf, split_into_chunks, generate_question, create_query_file, add_qa_file, check_file_exist
+from file_handler import save_uploaded_file, load_pdf, split_into_chunks, generate_question_from_docs, create_query_file, add_qa_file, check_file_exist
 
 model = "qwen2" # download model with "ollama pull qwen2" from PS terminal
 
@@ -54,13 +54,14 @@ if options == "Upload File":
             response = add_to_vectostore(chunks)
             if response:
                 st.sidebar.success("PDF indexed successfully!")
-
-                query_list = generate_question(docs)
+                query_list, used_token= generate_question_from_docs(docs)
                 query_file = create_query_file(file_name, query_list)
+                num_of_query = len(query_file)
                 st.session_state["query_file"].append(query_file)
                 for query in query_list:
-                            st.session_state["query_message"].append(query)
-                            st.sidebar.markdown(query)
+                    st.session_state["query_message"].append(query)
+                    st.sidebar.markdown(query)
+                st.sidebar.write(f"Total {used_token} tokens are used to generate {num_of_query} questions")
             else: 
                     st.sidebar.write("storing PDF file into vector store failed")               
         else:
